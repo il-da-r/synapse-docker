@@ -1,0 +1,9 @@
+.env
+!.env.example
+coturn/*.conf
+element/*.json
+letsencrypt/*
+nginx/conf.d/*.conf
+synapse/
+synapse-admin/*.json
+synapse_db/

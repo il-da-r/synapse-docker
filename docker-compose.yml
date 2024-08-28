@@ -1,0 +1,85 @@
+services:
+
+  synapse:
+    container_name: synapse
+    image: docker.io/matrixdotorg/synapse:${synapse_server_version}
+    restart: unless-stopped
+    environment:
+      - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
+    volumes:
+      - ./synapse:/data
+# sudo chown -R 991:991 ./synapse # If error
+    depends_on:
+      - synapse_db
+
+  synapse_db:
+    container_name: synapse_db
+    image: docker.io/postgres:${postgres_server_version}
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - ./synapse_db:/var/lib/postgresql/data
+
+  nginx:
+    container_name: nginx
+    image: nginx:${nginx_server_version}
+    restart: always
+    volumes:
+      - ./nginx:/etc/nginx
+      - ./letsencrypt/cert:/etc/letsencrypt
+      - ./letsencrypt/var:/var/www/certbot
+    ports:
+      - 443:443
+      - 80:80
+
+  certbot:
+    container_name: certbot
+    image: certbot/certbot
+    volumes:
+      - ./letsencrypt/cert:/etc/letsencrypt
+      - ./letsencrypt/var:/var/lib/letsencrypt
+
+  element:
+    container_name: element
+    image: vectorim/element-web:${element_web_server_version}
+    restart: unless-stopped
+    volumes:
+      - ./element/element-config.json:/app/config.json
+
+  synapse-admin:
+    container_name: synapse-admin
+    hostname: synapse-admin
+    build:
+      context: https://github.com/Awesome-Technologies/synapse-admin.git
+      args:
+        - BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+      #   - NODE_OPTIONS="--max_old_space_size=1024"
+      #   - BASE_PATH="/synapse-admin"
+    volumes:
+      - ./synapse-admin/config.json:/app/config.json:ro
+    restart: unless-stopped
+
+  coturn:
+    container_name: coturn
+    image: coturn/coturn
+    restart: unless-stopped
+    ports:
+      - 3478:3478/udp
+      - 3478:3478/tcp
+      - 5349:5349/tcp  # Если вы хотите использовать TLS для TURN
+      - 5349:5349/udp  # Если вы хотите использовать TLS для TURN
+      - 49160-49200:49160-49200/udp
+    environment:
+      - REALM=${DOMAIN}
+      - TOTAL_QUOTA=100
+      - BPS_CAPACITY=0
+      - STALE_NONCE=1
+      - FINGERPRINT=1
+      - USE_AUTH_SECRET=1
+      - STATIC_AUTH_SECRET=${STATIC_AUTH_SECRET_COTURN}
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf
+      - ./coturn/turnuserdb.conf:/var/lib/turn/turnuserdb.conf
